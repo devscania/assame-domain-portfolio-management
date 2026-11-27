@@ -1,0 +1,798 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+// Platform-level access audits are intentionally independent of workspace roles.
+model PlatformAdminAudit {
+  id         String   @id @default(cuid())
+  actorId    String
+  action     String
+  resourceId String?
+  detail     Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+}
+
+model SuspiciousActivity {
+  id          String    @id
+  kind        String
+  subjectId   String
+  windowStart DateTime
+  count       Int       @default(1)
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  raisedAt    DateTime?
+  readAt      DateTime?
+  dismissedAt DateTime?
+
+  @@unique([kind, subjectId, windowStart])
+  @@index([dismissedAt, raisedAt])
+  @@index([raisedAt, lastSeenAt])
+}
+
+model ContactRequest {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  kind      String   @default("contact")
+  status    String   @default("new")
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+}
+
+model User {
+  id                   String                @id @default(cuid())
+  email                String                @unique
+  name                 String?
+  emailVerified        DateTime?
+  image                String?
+  passwordHash         String?
+  verificationRequired Boolean               @default(false)
+  sessionVersion       Int                   @default(0)
+  deletedAt            DateTime?
+  createdAt            DateTime              @default(now())
+  members              OrganizationMember[]
+  accounts             Account[]
+  sessions             Session[]
+  loginSessions        AccountLoginSession[]
+  preference           UserPreference?
+  authTokens           AuthToken[]
+  ownedWorkspaces      Organization[]        @relation("WorkspaceOwner")
+  transfersSent        WorkspaceTransfer[]   @relation("TransferSender")
+  transfersReceived    WorkspaceTransfer[]   @relation("TransferRecipient")
+  renewalReminders     RenewalReminder[]
+  activityNotices      ActivityNotice[]
+  welcomeNotice        WelcomeNotice?
+  securityNotices      SecurityNotice[]
+  oauthSignupPending   OAuthSignupPending?
+}
+
+model OAuthSignupPending {
+  userId    String   @id
+  recovered Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SecurityNotice {
+  id        String    @id @default(cuid())
+  ownerId   String
+  kind      String
+  status    String    @default("pending")
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+  owner     User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+model WelcomeNotice {
+  ownerId   String    @id
+  status    String    @default("pending")
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+  owner     User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+model AccountLoginSession {
+  id                 String   @id
+  userId             String
+  sessionVersion     Int
+  method             String
+  oauthSignupPending Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  expiresAt          DateTime
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+// Created only when a consented browser requests verified conversion delivery.
+model AuthToken {
+  id        String   @id @default(cuid())
+  userId    String
+  kind      String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@index([expiresAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Organization {
+  id                     String                 @id @default(cuid())
+  name                   String
+  workspaceOwnerId       String?
+  workspaceOwner         User?                  @relation("WorkspaceOwner", fields: [workspaceOwnerId], references: [id], onDelete: Restrict)
+  currency               String                 @default("USD")
+  demo                   Boolean                @default(false)
+  pricePublishingEnabled Boolean                @default(false)
+  providerActionsEnabled Boolean                @default(false)
+  providerChanges        ProviderChange[]
+  priceChanges           ListingPriceChange[]
+  createdAt              DateTime               @default(now())
+  members                OrganizationMember[]
+  customRoles            WorkspaceCustomRole[]
+  domains                Domain[]
+  accounts               ProviderAccount[]
+  tags                   DomainTag[]
+  audits                 AuditLog[]
+  notifications          Notification[]
+  transfers              WorkspaceTransfer[]
+  renewalReminders       RenewalReminder[]
+  publicRegistrationJob  PublicRegistrationJob?
+
+  @@index([workspaceOwnerId])
+}
+
+model WorkspaceTransfer {
+  id             String       @id @default(cuid())
+  organizationId String
+  fromUserId     String
+  toUserId       String
+  status         String       @default("pending")
+  createdAt      DateTime     @default(now())
+  expiresAt      DateTime
+  resolvedAt     DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fromUser       User         @relation("TransferSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser         User         @relation("TransferRecipient", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([fromUserId, status])
+  @@index([toUserId, status])
+}
+
+model OrganizationMember {
+  id                String                  @id @default(cuid())
+  organizationId    String
+  userId            String
+  joinedAt          DateTime                @default(now())
+  role              Role                    @default(VIEWER)
+  customRoleId      String?
+  customRole        WorkspaceCustomRole?    @relation(fields: [customRoleId], references: [id], onDelete: NoAction)
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationReads NotificationRead[]
+  activityReads     WorkspaceActivityRead[]
+  jobReviews        ProviderJobReview[]
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+model WorkspaceCustomRole {
+  id                  String               @id @default(cuid())
+  organizationId      String
+  name                String
+  baseRole            Role
+  allowProviderWrites Boolean              @default(false)
+  allowDomainDeletion Boolean              @default(true)
+  allowFinanceRecords Boolean              @default(true)
+  allowSync           Boolean              @default(true)
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members             OrganizationMember[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model Provider {
+  id       String            @id
+  name     String
+  kind     String
+  accounts ProviderAccount[]
+}
+
+model ProviderAccount {
+  id             String                    @id @default(cuid())
+  organizationId String
+  providerId     String
+  label          String
+  status         String                    @default("unverified")
+  lastSyncAt     DateTime?
+  syncEveryHours Int                       @default(24)
+  lockedUntil    DateTime?
+  lockOwner      String?
+  createdAt      DateTime                  @default(now())
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider       Provider                  @relation(fields: [providerId], references: [id])
+  credential     EncryptedCredential?
+  syncState      ProviderSyncState?
+  jobs           SyncJob[]
+  registrations  DomainRegistration[]
+  listings       DomainListing[]
+  observedSales  ProviderSaleObservation[]
+  analytics      ProviderAnalytics[]
+  priceChanges   ListingPriceChange[]
+  changes        ProviderChange[]
+
+  @@unique([organizationId, providerId, label])
+}
+
+model EncryptedCredential {
+  id                String          @id @default(cuid())
+  providerAccountId String          @unique
+  ciphertext        String
+  keyVersion        Int             @default(1)
+  updatedAt         DateTime        @updatedAt
+  account           ProviderAccount @relation(fields: [providerAccountId], references: [id], onDelete: Cascade)
+}
+
+model ProviderSyncState {
+  id                String          @id @default(cuid())
+  providerAccountId String          @unique
+  cursor            String?
+  lastSuccessAt     DateTime?
+  account           ProviderAccount @relation(fields: [providerAccountId], references: [id], onDelete: Cascade)
+}
+
+// One shared timestamp for the most recent successfully completed outbox pass.
+model WorkerHeartbeat {
+  id              String   @id
+  lastCompletedAt DateTime @db.Timestamp(3)
+}
+
+model SyncJob {
+  id                String              @id @default(cuid())
+  providerAccountId String
+  status            String              @default("queued")
+  kind              String              @default("read")
+  requestedBy       String?
+  added             Int                 @default(0)
+  updated           Int                 @default(0)
+  error             String?
+  createdAt         DateTime            @default(now())
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  account           ProviderAccount     @relation(fields: [providerAccountId], references: [id], onDelete: Cascade)
+  items             SyncJobItem[]
+  errors            IntegrationError[]
+  priceChange       ListingPriceChange?
+  providerChange    ProviderChange?
+  reviews           ProviderJobReview[]
+
+  @@index([providerAccountId, status])
+  @@index([status, createdAt, id])
+}
+
+model ProviderJobReview {
+  jobId        String
+  membershipId String
+  reviewedAt   DateTime           @default(now())
+  job          SyncJob            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  membership   OrganizationMember @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, membershipId])
+  @@index([membershipId])
+}
+
+model SyncJobItem {
+  id         String  @id @default(cuid())
+  jobId      String
+  domainName String
+  status     String
+  message    String?
+  job        SyncJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, domainName])
+}
+
+model IntegrationError {
+  id        String   @id @default(cuid())
+  jobId     String
+  code      String
+  message   String
+  createdAt DateTime @default(now())
+  job       SyncJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model Domain {
+  id              String                @id @default(cuid())
+  organizationId  String
+  name            String
+  unicodeName     String
+  tld             String
+  status          String                @default("active")
+  currency        String                @default("USD")
+  acquisitionCost Decimal               @default(0) @db.Decimal(18, 2)
+  acquiredAt      DateTime?
+  askingPrice     Decimal?              @db.Decimal(18, 2)
+  source          String                @default("manual")
+  confidence      String                @default("manual")
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  deletedAt       DateTime?
+  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  registrations   DomainRegistration[]
+  listings        DomainListing[]
+  prices          DomainPriceHistory[]
+  tags            DomainTagAssignment[]
+  notes           DomainNote[]
+  expenses        DomainExpense[]
+  renewals        DomainRenewal[]
+  verifications   DomainVerification[]
+  providerChanges ProviderChange[]
+  sales           DomainSale[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, deletedAt, name])
+  @@index([organizationId, deletedAt, status])
+  @@index([organizationId, tld, status])
+  @@index([organizationId, createdAt])
+}
+
+model DomainRegistration {
+  id                String           @id @default(cuid())
+  domainId          String
+  providerAccountId String?
+  registrar         String
+  expiresAt         DateTime?
+  registeredAt      DateTime?
+  renewalCost       Decimal?         @db.Decimal(18, 2)
+  currency          String           @default("USD")
+  autoRenew         Boolean?
+  nameservers       String[]
+  dns               Json?
+  source            String           @default("manual")
+  verifiedAt        DateTime?
+  domain            Domain           @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  account           ProviderAccount? @relation(fields: [providerAccountId], references: [id], onDelete: SetNull)
+
+  @@unique([domainId, registrar])
+  @@index([expiresAt])
+}
+
+model DomainListing {
+  id                String               @id @default(cuid())
+  domainId          String
+  providerAccountId String?
+  marketplace       String
+  externalId        String?
+  binPrice          Decimal?             @db.Decimal(18, 2)
+  minOffer          Decimal?             @db.Decimal(18, 2)
+  currency          String               @default("USD")
+  status            String               @default("listed")
+  lto               Json?
+  analytics         Json?
+  source            String               @default("manual")
+  verifiedAt        DateTime?
+  stale             Boolean              @default(false)
+  statusCheckedAt   DateTime?
+  domain            Domain               @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  account           ProviderAccount?     @relation(fields: [providerAccountId], references: [id], onDelete: SetNull)
+  priceChanges      ListingPriceChange[]
+
+  @@unique([domainId, marketplace])
+  @@index([providerAccountId, status])
+  @@index([marketplace, status, statusCheckedAt])
+}
+
+model DomainPriceHistory {
+  id            String   @id @default(cuid())
+  domainId      String
+  marketplace   String
+  previousPrice Decimal? @db.Decimal(18, 2)
+  price         Decimal? @db.Decimal(18, 2)
+  currency      String
+  source        String
+  createdAt     DateTime @default(now())
+  domain        Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+}
+
+model DomainTag {
+  id             String                @id @default(cuid())
+  organizationId String
+  name           String
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments    DomainTagAssignment[]
+
+  @@unique([organizationId, name])
+}
+
+model DomainTagAssignment {
+  domainId String
+  tagId    String
+  domain   Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  tag      DomainTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([domainId, tagId])
+}
+
+model DomainNote {
+  id        String   @id @default(cuid())
+  domainId  String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+  domain    Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+}
+
+model DomainExpense {
+  id         String   @id @default(cuid())
+  domainId   String
+  category   String
+  amount     Decimal  @db.Decimal(18, 2)
+  currency   String
+  occurredAt DateTime @default(now())
+  source     String   @default("manual")
+  domain     Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, currency])
+}
+
+model DomainRenewal {
+  id          String   @id @default(cuid())
+  domainId    String
+  amount      Decimal  @db.Decimal(18, 2)
+  currency    String
+  expiresAt   DateTime
+  confirmedAt DateTime @default(now())
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, currency])
+}
+
+model ProviderChange {
+  id                String          @id @default(cuid())
+  organizationId    String
+  providerAccountId String
+  domainId          String
+  requestedBy       String
+  action            String
+  input             Json
+  snapshot          Json
+  status            String          @default("preview")
+  error             String?
+  expiresAt         DateTime
+  createdAt         DateTime        @default(now())
+  confirmedAt       DateTime?
+  finishedAt        DateTime?
+  syncJobId         String?         @unique
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account           ProviderAccount @relation(fields: [providerAccountId], references: [id], onDelete: Cascade)
+  domain            Domain          @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  job               SyncJob?        @relation(fields: [syncJobId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+}
+
+model DomainVerification {
+  id         String   @id @default(cuid())
+  domainId   String
+  source     String
+  status     String
+  verifiedAt DateTime @default(now())
+  domain     Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+}
+
+model DomainSale {
+  id           String                @id @default(cuid())
+  domainId     String
+  marketplace  String
+  grossAmount  Decimal               @db.Decimal(18, 2)
+  currency     String
+  kind         String                @default("outright")
+  status       String                @default("signed")
+  soldAt       DateTime              @default(now())
+  source       String                @default("manual")
+  domain       Domain                @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  payments     SalePayment[]
+  installments SaleInstallment[]
+  commissions  Commission[]
+  adjustments  FinancialAdjustment[]
+
+  @@index([soldAt])
+  @@index([domainId, status])
+}
+
+model SalePayment {
+  id                 String     @id @default(cuid())
+  saleId             String
+  amount             Decimal    @db.Decimal(18, 2)
+  commissionWithheld Decimal    @default(0) @db.Decimal(18, 2)
+  currency           String
+  receivedAt         DateTime?  @default(now())
+  reference          String
+  sale               DomainSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@unique([saleId, reference])
+  @@index([currency, receivedAt])
+}
+
+model SaleInstallment {
+  id       String     @id @default(cuid())
+  saleId   String
+  sequence Int
+  amount   Decimal    @db.Decimal(18, 2)
+  dueAt    DateTime
+  sale     DomainSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@unique([saleId, sequence])
+}
+
+model Commission {
+  id       String     @id @default(cuid())
+  saleId   String
+  amount   Decimal    @db.Decimal(18, 2)
+  currency String
+  sale     DomainSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId, currency])
+}
+
+model FinancialAdjustment {
+  id        String     @id @default(cuid())
+  saleId    String
+  amount    Decimal    @db.Decimal(18, 2)
+  currency  String
+  reason    String
+  createdAt DateTime   @default(now())
+  sale      DomainSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId, currency])
+}
+
+model AuditLog {
+  id             String                  @id @default(cuid())
+  organizationId String
+  actorId        String
+  action         String
+  entityId       String?
+  detail         Json?
+  createdAt      DateTime                @default(now())
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reads          WorkspaceActivityRead[]
+
+  @@index([organizationId, createdAt])
+}
+
+model WorkspaceActivityRead {
+  activityId   String
+  membershipId String
+  readAt       DateTime           @default(now())
+  activity     AuditLog           @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  membership   OrganizationMember @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, membershipId])
+  @@index([membershipId])
+}
+
+model Notification {
+  id             String             @id @default(cuid())
+  organizationId String
+  title          String
+  readAt         DateTime?
+  createdAt      DateTime           @default(now())
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reads          NotificationRead[]
+}
+
+model NotificationRead {
+  notificationId String
+  membershipId   String
+  readAt         DateTime           @default(now())
+  notification   Notification       @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  membership     OrganizationMember @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([notificationId, membershipId])
+  @@index([membershipId])
+}
+
+model UserPreference {
+  id                  String  @id @default(cuid())
+  userId              String  @unique
+  theme               String  @default("system")
+  notifications       Boolean @default(true)
+  renewalEmails       Boolean @default(false)
+  activityEmails      Boolean @default(false)
+  activityBulkEmails  Boolean @default(true)
+  activityPriceEmails Boolean @default(true)
+  activitySyncEmails  Boolean @default(true)
+  savedFilters        Json?
+  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ActivityNotice {
+  eventId        String    @id
+  ownerId        String
+  organizationId String?
+  recipientId    String?
+  title          String?
+  message        String?
+  category       String    @default("other")
+  status         String    @default("pending")
+  createdAt      DateTime  @default(now())
+  reservedAt     DateTime?
+  sentAt         DateTime?
+  owner          User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([ownerId, reservedAt])
+}
+
+model RenewalReminder {
+  id             String       @id @default(cuid())
+  organizationId String
+  ownerId        String
+  weekStart      DateTime     @db.Date
+  status         String       @default("pending")
+  createdAt      DateTime     @default(now())
+  sentAt         DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner          User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, ownerId, weekStart])
+  @@index([status, createdAt])
+}
+
+model AuthThrottle {
+  key      String   @id
+  attempts Int      @default(0)
+  resetAt  DateTime
+
+  @@index([resetAt])
+}
+
+model SpaceshipRequestBudget {
+  key       String   @id
+  stamps    BigInt[] @default([])
+  updatedAt DateTime @default(now())
+
+  @@index([updatedAt])
+}
+
+model ProviderSaleObservation {
+  id                    String          @id @default(cuid())
+  providerAccountId     String
+  externalId            String
+  domainName            String
+  status                String
+  kind                  String
+  amount                Decimal         @db.Decimal(18, 2)
+  commissionAmount      Decimal?        @db.Decimal(18, 2)
+  installmentAmount     Decimal?        @db.Decimal(18, 2)
+  nextInstallmentAt     DateTime?
+  previousInstallmentAt DateTime?
+  disbursedAt           DateTime?
+  currency              String
+  soldAt                DateTime?
+  installments          Int?
+  installmentsPaid      Int?
+  observedAt            DateTime        @default(now())
+  account               ProviderAccount @relation(fields: [providerAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([providerAccountId, externalId])
+  @@index([providerAccountId, observedAt])
+}
+
+model ProviderAnalytics {
+  id                String          @id @default(cuid())
+  providerAccountId String
+  date              DateTime        @db.Date
+  views             Int
+  leads             Int
+  observedAt        DateTime        @default(now())
+  account           ProviderAccount @relation(fields: [providerAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([providerAccountId, date])
+}
+
+model ListingPriceChange {
+  id                String          @id @default(cuid())
+  organizationId    String
+  providerAccountId String
+  listingId         String
+  requestedBy       String
+  oldPrice          Decimal?        @db.Decimal(18, 2)
+  newPrice          Decimal         @db.Decimal(18, 2)
+  currency          String
+  remoteStatus      String
+  status            String          @default("preview")
+  error             String?
+  expiresAt         DateTime
+  createdAt         DateTime        @default(now())
+  confirmedAt       DateTime?
+  verifiedAt        DateTime?
+  syncJobId         String?         @unique
+  notificationGroup String?
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account           ProviderAccount @relation(fields: [providerAccountId], references: [id], onDelete: Cascade)
+  listing           DomainListing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  job               SyncJob?        @relation(fields: [syncJobId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+  @@index([notificationGroup])
+}
+
+model PublicRegistrationJob {
+  organizationId String       @id
+  requestedBy    String
+  status         String       @default("queued")
+  cursor         String       @default("")
+  updated        Int          @default(0)
+  unchanged      Int          @default(0)
+  unavailable    Int          @default(0)
+  createdAt      DateTime     @default(now())
+  leaseUntil     DateTime?
+  leaseToken     String?
+  finishedAt     DateTime?
+  error          String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}

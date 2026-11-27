@@ -1,0 +1,15 @@
+{
+  "domains": [
+    {
+      "name": "fixture.test",
+      "buynowPrice": 4999000000,
+      "minbidPrice": 100000000,
+      "listStatus": "ACTIVE",
+      "intakeViews": 37,
+      "intakeLeads": 2,
+      "leasingEnabled": true,
+      "maxLeasePeriod": 24
+    }
+  ],
+  "pagination": { "total": 1 }
+}

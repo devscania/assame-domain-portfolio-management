@@ -1,0 +1,20 @@
+.guide {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 6% 80px;
+  color: var(--text);
+}
+.guide h2 { margin: 36px 0 16px; font-size: 25px; letter-spacing: -.025em; }
+.guide p, .guide li, .guide dd { color: var(--muted); line-height: 1.8; }
+.guide p { margin: 14px 0; }
+.guide ol, .guide ul { padding-left: 24px; }
+.guide ol { list-style: decimal; }
+.guide ul { list-style: disc; }
+.guide li { margin-bottom: 12px; padding-left: 4px; }
+.guide dl { display: grid; gap: 12px; }
+.guide dl > div { border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; background: var(--surface); }
+.guide dt { margin-bottom: 4px; }
+.guide dd { margin: 0; }
+.guide details { border-bottom: 1px solid var(--border); padding: 18px 0; }
+.guide summary { cursor: pointer; font-weight: 600; }
+.guide a { overflow-wrap: anywhere; }

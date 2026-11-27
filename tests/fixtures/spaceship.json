@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "name": "fixture.test",
+      "autoRenew": false,
+      "registrationDate": "2026-01-01T00:00:00Z",
+      "expirationDate": "2027-01-01T00:00:00Z",
+      "nameservers": { "hosts": ["ns1.example.net", "ns2.example.net"] }
+    }
+  ],
+  "total": 1
+}

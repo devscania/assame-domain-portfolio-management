@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: domainconsole
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+      POSTGRES_DB: domainconsole
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U domainconsole -d domainconsole"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  migrate:
+    build:
+      context: .
+      target: worker
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://domainconsole:${POSTGRES_PASSWORD:-local-development-only}@db:5432/domainconsole
+    command: [npx, prisma, migrate, deploy]
+    depends_on:
+      db:
+        condition: service_healthy
+  web:
+    build:
+      context: .
+      target: runner
+      args:
+        AUTH_URL: ${AUTH_URL:-http://localhost:3010}
+        NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID:-}
+        GOOGLE_SITE_VERIFICATION: ${GOOGLE_SITE_VERIFICATION:-}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://domainconsole:${POSTGRES_PASSWORD:-local-development-only}@db:5432/domainconsole
+    ports:
+      - "127.0.0.1:3010:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  worker:
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    # Allow an accepted billing transaction/provider verification to finish.
+    stop_grace_period: 150s
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://domainconsole:${POSTGRES_PASSWORD:-local-development-only}@db:5432/domainconsole
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+volumes:
+  postgres_data:

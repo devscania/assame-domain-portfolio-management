@@ -1,0 +1,9 @@
+{
+  "ListDomainInfoResponse": {
+    "ResponseCode": 0,
+    "Status": "success",
+    "MainDomains": [
+      { "Name": "fixture.test", "Expiration": "1798761600000", "Registration": "1767225600000" }
+    ]
+  }
+}

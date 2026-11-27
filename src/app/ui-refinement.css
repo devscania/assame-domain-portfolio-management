@@ -1,0 +1,234 @@
+/* Shared controls and transient surfaces: scoped page styles add their own layout. */
+.btn {
+  font-weight: 600;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+.btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+.btn-primary:not(:disabled):hover {
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.input,
+select,
+textarea {
+  transition:
+    border-color 0.18s,
+    box-shadow 0.18s,
+    background 0.18s;
+}
+.input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 11%, transparent);
+}
+.dialog-content {
+  border-radius: 16px;
+  padding: 27px;
+  max-height: min(86dvh, 900px);
+  overflow-y: auto;
+  animation: dialog-enter 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dialog-header h2 {
+  font-size: 22px;
+  line-height: 1.3;
+}
+.dialog-header p {
+  font-size: 12px;
+  max-width: 55ch;
+}
+.dialog-header > .btn {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+.dialog-content .field > span {
+  font-size: 12px;
+  font-weight: 600;
+}
+.dialog-content .field small {
+  line-height: 1.6;
+}
+.dropdown {
+  padding: 7px;
+  border-radius: 11px;
+  box-shadow: 0 14px 42px #00000014;
+  animation: menu-enter 0.18s ease-out;
+}
+.dropdown [role='menuitem'],
+.dropdown [role='menuitemcheckbox'] {
+  min-height: 37px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.empty {
+  padding: 45px 24px;
+}
+.empty h3 {
+  font-size: 18px;
+  letter-spacing: -0.4px;
+}
+.empty p {
+  max-width: 42ch;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.text-link {
+  text-underline-offset: 4px;
+}
+.text-link:hover {
+  text-decoration: underline;
+}
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.985;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+@keyframes menu-enter {
+  from {
+    opacity: 0.5;
+    translate: 0 -4px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@media (max-width: 600px) {
+  .dialog-content {
+    padding: 21px;
+    max-height: 90dvh;
+  }
+  .dialog-actions {
+    flex-wrap: wrap;
+  }
+  .dialog-actions .btn {
+    min-height: 42px;
+  }
+  .dialog-header h2 {
+    font-size: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  .btn:not(:disabled):active {
+    transform: none;
+  }
+}
+.dialog-content[data-state='closed'] {
+  animation: dialog-leave 0.15s ease-in forwards;
+}
+.dialog-overlay[data-state='closed'] {
+  animation: overlay-leave 0.15s ease-in forwards;
+}
+.dropdown[data-state='closed'] {
+  animation: menu-leave 0.12s ease-in forwards;
+}
+@keyframes dialog-leave {
+  to {
+    opacity: 0;
+    translate: 0 6px;
+    scale: 0.99;
+  }
+}
+@keyframes overlay-leave {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes menu-leave {
+  to {
+    opacity: 0;
+    translate: 0 -3px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog-content[data-state],
+  .dialog-overlay[data-state],
+  .dropdown[data-state] {
+    animation: none !important;
+  }
+}
+
+/* A single icon control is shared by public, account, admin and workspace surfaces. */
+.theme-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    transform 0.2s;
+}
+.theme-toggle:hover {
+  color: var(--accent-text);
+  background: var(--surface-hover);
+}
+.theme-toggle:active {
+  transform: scale(0.95);
+}
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.theme-toggle:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.appearance-setting {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.provider-icon {
+  flex: none;
+  display: inline-block;
+}
+.discord-icon {
+  color: #5865f2;
+}
+.dark .discord-icon {
+  color: #a5adff;
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle {
+    transition: none;
+  }
+  .theme-toggle:active {
+    transform: none;
+  }
+}

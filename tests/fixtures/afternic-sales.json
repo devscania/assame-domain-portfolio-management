@@ -1,0 +1,20 @@
+{
+  "sales": [
+    {
+      "transactionId": "test-transaction-001",
+      "name": "fixture.test",
+      "salePrice": 1545000000,
+      "commission": 309000000,
+      "installmentAmount": 75340000,
+      "nextInstallmentDate": "2026-11-14",
+      "prevInstallmentDate": "2026-10-15",
+      "status": "PENDING",
+      "saleType": "LEASED",
+      "soldAt": "2026-10-01T00:00:00Z",
+      "totalInstallments": 17,
+      "totalInstallmentsPaid": 1,
+      "authCode": "must-never-be-stored-or-returned"
+    }
+  ],
+  "pagination": { "total": 1 }
+}

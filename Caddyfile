@@ -1,0 +1,19 @@
+{$DOMAIN_CONSOLE_HOST:localhost} {
+    encode zstd gzip
+    request_body {
+        max_size 12MB
+    }
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy same-origin
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+    # The immediate peer must be an explicitly allowed operator address.
+    @admin_denied {
+        path /admin /admin/* /api/admin /api/admin/*
+        not remote_ip {$ASSAME_ADMIN_ALLOWED_IPS:127.0.0.1/32 ::1/128}
+    }
+    respond @admin_denied "Not found" 404
+    reverse_proxy 127.0.0.1:3010
+}

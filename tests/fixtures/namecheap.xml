@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApiResponse xmlns="http://api.namecheap.com/xml.response" Status="OK">
+  <Errors />
+  <RequestedCommand>namecheap.domains.getlist</RequestedCommand>
+  <CommandResponse Type="namecheap.domains.getList">
+    <DomainGetListResult>
+      <Domain ID="101" Name="Namecheap-Fixture.test" Created="02/29/2024" Expires="02/28/2027" AutoRenew="true" IsExpired="false" />
+      <Domain ID="102" Name="xn--bcher-kva.test" Created="11/06/2025" Expires="11/06/2027" AutoRenew="False" IsExpired="false" />
+    </DomainGetListResult>
+    <Paging><TotalItems>2</TotalItems><CurrentPage>1</CurrentPage><PageSize>100</PageSize></Paging>
+  </CommandResponse>
+</ApiResponse>
