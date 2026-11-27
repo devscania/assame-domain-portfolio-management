@@ -140,9 +140,9 @@ test('registration verifies email and password recovery revokes the old password
     ).toBe(200);
     expect((await page.request.get('/api/export')).status()).toBe(200);
     expect((await postAction('domain.delete', { id: firstDomain.id })).status()).toBe(200);
-    expect(await (await page.request.get('/api/console?view=workspaceRestriction')).json()).toEqual(
-      { restricted: false },
-    );
+    const remainingPortfolio = await page.request.get('/api/console?view=summary');
+    expect(remainingPortfolio.status()).toBe(200);
+    expect(await remainingPortfolio.json()).toMatchObject({ total: 25 });
     expect(
       (await postAction('note.create', { domainId: secondDomain.id, body: 'A note' })).status(),
     ).toBe(200);
