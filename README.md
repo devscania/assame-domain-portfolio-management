@@ -34,16 +34,30 @@ npm ci
 docker compose up -d --wait db
 npm run db:migrate
 npm run db:seed
-npm run dev
+npm run dev:all
 ```
 
 Open [http://localhost:3010](http://localhost:3010). Sign in with **demo@assame.local** and **AssameDemo!2026**. These are local demo credentials. The seed creates a synthetic portfolio when `DEMO_MODE=true` in development. Use [the sample CSV](public/sample-domains.csv) to try imports.
 
-Run `npm run worker` in a second terminal to enable background jobs. You can also use `npm run dev:all` to launch the web server and worker together after starting PostgreSQL and applying migrations.
+`npm run dev:all` starts the web server and background worker together in one terminal. On subsequent starts, start PostgreSQL with `docker compose up -d --wait db`, then run `npm run dev:all`.
 
 `npm run setup:env` creates an ignored `.env` with fresh database, authentication, and credential-encryption secrets. It preserves an existing file. If port 5432 is in use, set a free port in both `POSTGRES_PORT` and `DATABASE_URL` in `.env` before starting the database. If you change the web port, start Next.js on the new port and update `AUTH_URL` to match.
 
 ## Configure an instance
+
+### Configure credential encryption
+
+`npm run setup:env` generates an encryption key when creating a new `.env`. It preserves an existing `.env`, so a file copied from `.env.example` still needs a key before you can connect providers.
+
+`CREDENTIAL_ENCRYPTION_KEY` must contain exactly **64 hexadecimal characters** (`0–9`, `a–f`), representing 32 random bytes. To generate a new key locally:
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Copy the complete output into the `CREDENTIAL_ENCRYPTION_KEY` setting in your ignored `.env`. Use the same key for the web server and worker. Stop both processes after changing `.env`, then restart them with `npm run dev:all` for local development.
+
+Keep the key securely backed up. Existing provider credentials depend on the original key; if it is missing, restore it from your backup so those credentials remain readable.
 
 ### Create an account from the terminal
 
