@@ -277,8 +277,8 @@ export function DomainDetails({ id }: { id: string }) {
                 )}
                 <ProviderAction domain={domain} action="changeNameservers" />
                 <p className="muted text-sm">
-                  Changes require a supported registrar connection for this domain. Displayed values
-                  are the latest recorded provider observation.
+                  Nameservers can be retrieved from your registrar or a public lookup. Changes
+                  require a supported registrar connection for this domain.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {domain.tags.map((t) => (

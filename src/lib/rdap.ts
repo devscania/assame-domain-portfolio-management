@@ -2,6 +2,7 @@ import { isIP } from 'node:net';
 import Papa from 'papaparse';
 import { z } from 'zod';
 import { normalizeDomain } from './domain';
+import { normalizeNameservers } from './public-nameservers';
 
 const bootstrapUrl = 'https://data.iana.org/rdap/dns.json';
 const registrarIdsUrl = 'https://www.iana.org/assignments/registrar-ids/registrar-ids-1.csv';
@@ -13,6 +14,7 @@ const rdapDomain = z.object({
   objectClassName: z.literal('domain'),
   ldhName: z.string(),
   events: z.array(z.object({ eventAction: z.string(), eventDate: z.string() })).default([]),
+  nameservers: z.array(z.unknown()).default([]),
   entities: z
     .array(
       z.object({
@@ -153,5 +155,13 @@ export async function lookupRegistration(name: string) {
         : undefined,
     expiresAt: date('expiration'),
     registeredAt: date('registration'),
+    nameservers: normalizeNameservers(
+      result.data.nameservers.map((entry) => {
+        const parsed = z
+          .object({ ldhName: z.string().optional(), unicodeName: z.string().optional() })
+          .safeParse(entry);
+        return parsed.success ? parsed.data.ldhName || parsed.data.unicodeName : undefined;
+      }),
+    ),
   };
 }

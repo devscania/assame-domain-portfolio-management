@@ -14,6 +14,15 @@ it('uses the registry for the domain and extracts its published registrar and ex
         { roles: ['registrar'], vcardArray: ['vcard', [['fn', {}, 'text', 'Example Registrar']]] },
       ],
       events: [{ eventAction: 'expiration', eventDate: '2028-01-01' }],
+      nameservers: [
+        { ldhName: 'NS2.Example.COM.' },
+        { ldhName: 'ns1.example.com' },
+        { ldhName: 'ns1.example.com.' },
+        { unicodeName: 'ns3.example.com' },
+        { ldhName: 'https://invalid.example.com' },
+        { ldhName: '127.0.0.1' },
+        null,
+      ],
     });
   });
   vi.stubGlobal('fetch', fetcher);
@@ -22,6 +31,7 @@ it('uses the registry for the domain and extracts its published registrar and ex
       registrar: 'Example Registrar',
       expiresAt: new Date('2028-01-01T00:00:00Z'),
       registeredAt: undefined,
+      nameservers: ['ns1.example.com', 'ns2.example.com', 'ns3.example.com'],
     });
     expect(fetcher.mock.calls[1][0].href).toBe(
       'https://registry.example/rdap/domain/portfolio.test',

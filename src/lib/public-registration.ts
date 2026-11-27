@@ -6,6 +6,8 @@ import { lookupRegistration } from './rdap';
 import { audit } from './portfolio';
 import { AppError } from './security';
 import { lockWritableWorkspace } from './workspace-write';
+import { lookupPublicNameservers } from './public-nameservers';
+import type { Prisma } from '@prisma/client';
 
 const unknown = (registrar: string) =>
   !registrar.trim() || registrar.trim().toLowerCase() === 'unknown';
@@ -28,23 +30,43 @@ export async function fillPublicRegistrations(
   for (let start = 0; start < domains.length; start += 4) {
     const batch = await Promise.all(
       domains.slice(start, start + 4).map(async (domain) => {
-        const needed = !domain.registrations.some(
+        const missingMetadata = !domain.registrations.some(
           (row) => !unknown(row.registrar) && row.expiresAt,
         );
-        const observation = needed ? await lookupRegistration(domain.name).catch(() => null) : null;
-        return { domain, needed, observation };
+        const missingNameservers = !domain.registrations.some((row) => row.nameservers.length);
+        const needed = missingMetadata || missingNameservers;
+        const readRdap =
+          missingMetadata || (missingNameservers && domain.registrations.length !== 1);
+        const [initialObservation, dnsNameservers] = await Promise.all([
+          readRdap ? lookupRegistration(domain.name).catch(() => null) : null,
+          missingNameservers ? lookupPublicNameservers(domain.name).catch(() => []) : [],
+        ]);
+        const observation =
+          missingNameservers && !dnsNameservers.length && !readRdap
+            ? await lookupRegistration(domain.name).catch(() => null)
+            : initialObservation;
+        const nameservers = dnsNameservers.length
+          ? dnsNameservers
+          : (observation?.nameservers ?? []);
+        return {
+          domain,
+          needed,
+          observation,
+          nameservers,
+          nameserverSource: dnsNameservers.length ? 'public-dns' : 'public-rdap',
+        };
       }),
     );
-    for (const { domain, needed, observation } of batch) {
+    for (const { domain, needed, observation, nameservers, nameserverSource } of batch) {
       if (!needed) {
         totals.unchanged++;
         continue;
       }
-      if (!observation?.registrar) {
+      if (!observation?.registrar && !nameservers.length) {
         totals.unavailable++;
         continue;
       }
-      const registrar = observation.registrar;
+      const registrar = observation?.registrar;
       const changed = await db.$transaction(async (tx) => {
         await lockWritableWorkspace(tx, ctx, 'EDITOR', false, 'sync');
         await beforeSave?.(tx);
@@ -52,46 +74,79 @@ export async function fillPublicRegistrations(
           where: { ...where, id: domain.id, name: domain.name },
           select: { registrations: true },
         });
-        if (
-          !current ||
-          current.registrations.some((row) => !unknown(row.registrar) && row.expiresAt)
-        )
-          return false;
+        if (!current) return false;
         const matching = current.registrations.filter(
-          (row) => registrarKey(row.registrar) === registrarKey(registrar),
+          (row) => registrar && registrarKey(row.registrar) === registrarKey(registrar),
         );
         const placeholder =
           current.registrations.length === 1 && unknown(current.registrations[0].registrar)
             ? current.registrations[0]
             : undefined;
-        const row = matching.length === 1 ? matching[0] : placeholder;
-        if (row?.providerAccountId || row?.verifiedAt || (!row && current.registrations.length))
-          return false;
-        const provider = providerIdForName(registrar);
-        const data = {
-          registrar:
-            row && !placeholder ? row.registrar : provider ? providers[provider].name : registrar,
-          expiresAt: row?.expiresAt ?? observation.expiresAt,
-          registeredAt: row?.registeredAt ?? observation.registeredAt,
-        };
+        const row =
+          matching.length === 1
+            ? matching[0]
+            : (placeholder ??
+              (current.registrations.length === 1 ? current.registrations[0] : undefined));
+        if (!row && current.registrations.length) return false;
+        const provider = registrar ? providerIdForName(registrar) : undefined;
+        const publicRegistrar = provider ? providers[provider].name : registrar;
+        const fields: string[] = [];
         if (row) {
+          const data: Prisma.DomainRegistrationUpdateManyMutationInput = {};
+          if (!row.providerAccountId && !row.verifiedAt && (placeholder || matching.length === 1)) {
+            if (placeholder && publicRegistrar) {
+              data.registrar = publicRegistrar;
+              fields.push('registrar');
+            }
+            if (!row.expiresAt && observation?.expiresAt) {
+              data.expiresAt = observation.expiresAt;
+              fields.push('expiresAt');
+            }
+            if (!row.registeredAt && observation?.registeredAt) {
+              data.registeredAt = observation.registeredAt;
+              fields.push('registeredAt');
+            }
+            if (fields.length) data.source = 'public-rdap';
+          }
           if (
-            !placeholder &&
-            !(!row.expiresAt && data.expiresAt) &&
-            !(!row.registeredAt && data.registeredAt)
-          )
-            return false;
-          await tx.domainRegistration.update({
-            where: { id: row.id },
-            data: { ...data, source: 'public-rdap' },
+            nameservers.length &&
+            !current.registrations.some((registration) => registration.nameservers.length)
+          ) {
+            data.nameservers = nameservers;
+            fields.push('nameservers');
+          }
+          if (!fields.length) return false;
+          const saved = await tx.domainRegistration.updateMany({
+            where: {
+              id: row.id,
+              ...(fields.includes('nameservers') ? { nameservers: { isEmpty: true } } : {}),
+            },
+            data,
           });
+          if (!saved.count) return false;
         } else {
           await tx.domainRegistration.create({
-            data: { ...data, domainId: domain.id, nameservers: [], source: 'public-rdap' },
+            data: {
+              registrar: publicRegistrar || 'Unknown',
+              expiresAt: observation?.expiresAt,
+              registeredAt: observation?.registeredAt,
+              domainId: domain.id,
+              nameservers,
+              source: publicRegistrar ? 'public-rdap' : nameserverSource,
+            },
           });
+          if (publicRegistrar) fields.push('registrar');
+          if (observation?.expiresAt) fields.push('expiresAt');
+          if (observation?.registeredAt) fields.push('registeredAt');
+          if (nameservers.length) fields.push('nameservers');
         }
         await audit(tx, ctx, 'registration.public_lookup', domain.id, {
-          registrar: data.registrar,
+          registrar:
+            placeholder && publicRegistrar
+              ? publicRegistrar
+              : row?.registrar || publicRegistrar || 'Unknown',
+          fields,
+          ...(fields.includes('nameservers') ? { nameserverSource, nameservers } : {}),
         });
         return true;
       });

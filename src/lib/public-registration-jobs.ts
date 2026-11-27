@@ -81,10 +81,12 @@ export async function runPublicRegistration(organizationId: string) {
     const domains = await db.$queryRaw<{ id: string }[]>`
       SELECT d.id FROM "Domain" d
       WHERE d."organizationId"=${organizationId} AND d."deletedAt" IS NULL AND d.id>${job.cursor}
-        AND NOT EXISTS (
+        AND (NOT EXISTS (
           SELECT 1 FROM "DomainRegistration" r WHERE r."domainId"=d.id
           AND r."expiresAt" IS NOT NULL AND lower(btrim(r.registrar)) NOT IN ('', 'unknown')
-        )
+        ) OR NOT EXISTS (
+          SELECT 1 FROM "DomainRegistration" r WHERE r."domainId"=d.id AND cardinality(r.nameservers)>0
+        ))
       ORDER BY d.id LIMIT ${batchSize}
     `;
     const result = await fillPublicRegistrations(
