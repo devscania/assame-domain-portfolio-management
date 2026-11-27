@@ -3,14 +3,17 @@ import { useState } from 'react';
 import { trackContactSubmission } from './analytics';
 import { ArrowUpRight, CheckCircle2, CircleAlert } from 'lucide-react';
 import { contactKindLabels, contactKinds, type ContactKind } from '@/lib/contact-kind';
+import { useClientReady } from './use-client-ready';
 
 export function ContactForm({ initialKind = 'contact' }: { initialKind?: ContactKind }) {
   const [kind, setKind] = useState(initialKind);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<'success' | 'error' | null>(null);
+  const ready = useClientReady();
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!ready || busy) return;
     const form = event.currentTarget;
     setBusy(true);
     setMessage('');
@@ -25,6 +28,7 @@ export function ContactForm({ initialKind = 'contact' }: { initialKind?: Contact
       if (!response.ok) throw new Error(result.error);
       trackContactSubmission();
       form.reset();
+      setKind(initialKind);
       setMessage('Your request has been received.');
       setStatus('success');
     } catch (error) {
@@ -47,6 +51,7 @@ export function ContactForm({ initialKind = 'contact' }: { initialKind?: Contact
           name="kind"
           className="input"
           value={kind}
+          disabled={!ready || busy}
           onChange={(event) => setKind(event.target.value as ContactKind)}
         >
           {contactKinds.map((value) => (
@@ -93,7 +98,7 @@ export function ContactForm({ initialKind = 'contact' }: { initialKind?: Contact
         />
       </label>
       <p>Please do not include passwords, API keys or payment information.</p>
-      <button className="marketing-button" disabled={busy}>
+      <button className="marketing-button" disabled={!ready || busy}>
         {busy ? 'Sending…' : 'Send request'} <ArrowUpRight size={16} aria-hidden="true" />
       </button>
       {message && (
