@@ -1,10 +1,26 @@
-# Domain portfolio web app
+# Assame — domain portfolio management
 
 Manage domain inventory, registrar and marketplace records, renewals, sales, and costs in a browser. The app supports multiple workspaces, CSV import and export, financial reporting, and optional provider synchronization.
+
+Connect **Namecheap, Spaceship, Afternic, Atom, and Dynadot** to manage your domain portfolio in one place. GoDaddy and a separate Atom Registrar connection are also supported.
 
 The web app uses Next.js, React, TypeScript, Prisma, and PostgreSQL. A separate worker handles synchronization, background jobs, and email.
 
 ![Assame portfolio overview showing domain totals, recorded investment, renewal reminders and financial charts with synthetic demo data](docs/images/portfolio-overview.png)
+
+## Supported integrations
+
+| Provider           | Supported data and operations                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Namecheap**      | Registrar domain inventory, expiration dates, auto-renew status, and confirmed nameserver changes.                                      |
+| **Spaceship**      | Registrar inventory and expiration dates, SellerHub marketplace listings and prices, confirmed listing changes, and nameserver changes. |
+| **Afternic**       | Marketplace listings and BIN prices, confirmed listing changes, and sales and traffic statistics where available.                       |
+| **Atom**           | Seller marketplace listings, BIN prices, statistics, and confirmed Standard listing creation and removal.                               |
+| **Dynadot**        | Registrar inventory and expiration dates, marketplace listings and prices, and confirmed listing changes.                               |
+| **GoDaddy**        | Read-only registrar domain inventory and expiration dates.                                                                              |
+| **Atom Registrar** | Registrar inventory, expiration dates, and auto-renew observations using a separate registrar token.                                    |
+
+Integrations require your own provider API access and permissions. Provider writes must be enabled by the instance operator and workspace owner, and require an exact preview and explicit confirmation.
 
 ## Run locally
 
