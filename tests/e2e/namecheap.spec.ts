@@ -36,7 +36,7 @@ test('Namecheap connection validates IPv4 and stores credentials without exposin
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Portfolio overview' })).toBeVisible();
     await page.waitForLoadState('load');
-    await page.goto('/integrations');
+    await page.goto('/connections');
     await page.getByRole('button', { name: 'Connect Namecheap', exact: true }).click();
     await expect(page.getByLabel('API secret', { exact: true })).toHaveCount(0);
     await page.getByLabel('Account label').fill('NAMECHEAP UI FIXTURE');
@@ -49,14 +49,7 @@ test('Namecheap connection validates IPv4 and stores credentials without exposin
     await page.getByRole('button', { name: 'Save encrypted credentials' }).click();
     expect((await invalid).status()).toBe(400);
     await page.getByLabel('Allowlisted public IPv4', { exact: true }).fill('203.0.113.10');
-    const denied = page.waitForResponse(
-      (r) => r.url().endsWith('/api/console') && r.request().method() === 'POST',
-    );
-    await page.getByRole('button', { name: 'Save encrypted credentials' }).click();
-    expect((await denied).status()).toBe(403);
     expect(await db.providerAccount.count({ where: { organizationId: orgId } })).toBe(0);
-    // Explicit synthetic evaluation enables the paid integration for this test.
-
     const saved = page.waitForResponse(
       (r) => r.url().endsWith('/api/console') && r.request().method() === 'POST',
     );

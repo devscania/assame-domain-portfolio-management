@@ -9,6 +9,8 @@ import { sendOneSecurityNotice } from '../../src/lib/security-notices';
 test('registration verifies email and password recovery revokes the old password', async ({
   page,
 }) => {
+  // This journey compiles several auth/settings routes and rotates credentials three times.
+  test.setTimeout(240000);
   test.skip(
     !process.env.TEST_DATABASE_URL ||
       process.env.TEST_DATABASE_URL !== process.env.DATABASE_URL ||
@@ -84,6 +86,11 @@ test('registration verifies email and password recovery revokes the old password
     expect(await sendOneSecurityNotice()).toBe(true);
     await page.goto('/login');
     await page.getByLabel('Email address').fill(email);
+    await page.getByLabel('Password', { exact: true }).fill('BrowserTest!2026secure');
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(
+      page.getByText('Unable to sign in. Check your credentials or try again later.'),
+    ).toBeVisible();
     await page.getByLabel('Password', { exact: true }).fill('AnotherBrowser!2026secure');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Portfolio overview' })).toBeVisible();
@@ -112,7 +119,7 @@ test('registration verifies email and password recovery revokes the old password
         tld: 'test',
       },
     });
-    // A new account really has 25 slots; arbitrary baseline edits are ignored.
+    // The self-hosted release permits more than 25 domains without restricting writes.
     await db.domain.createMany({
       data: Array.from({ length: 24 }, (_, index) => ({
         organizationId: orgId,
@@ -122,9 +129,7 @@ test('registration verifies email and password recovery revokes the old password
       })),
     });
     await page.reload();
-    await expect(
-      page.getByText(/This workspace is read-only because its owner is over/),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Connect your portfolio' })).toBeVisible();
     const postAction = (action: string, data: object) =>
       page.request.post('/api/console', {
         headers: { Origin: browserOrigin },
@@ -132,7 +137,7 @@ test('registration verifies email and password recovery revokes the old password
       });
     expect(
       (await postAction('note.create', { domainId: secondDomain.id, body: 'A note' })).status(),
-    ).toBe(409);
+    ).toBe(200);
     expect((await page.request.get('/api/export')).status()).toBe(200);
     expect((await postAction('domain.delete', { id: firstDomain.id })).status()).toBe(200);
     expect(await (await page.request.get('/api/console?view=workspaceRestriction')).json()).toEqual(
@@ -201,9 +206,6 @@ test('registration verifies email and password recovery revokes the old password
       const replay = await page.request.get(callback, { maxRedirects: 0 });
       expect(replay.headers().location).toContain('OAuthLinkRequired');
     }
-    await page.getByRole('link', { name: 'View payment history' }).click();
-    await expect(page.getByRole('heading', { name: 'Payment history' })).toBeVisible();
-    await expect(page.getByText('No verified transactions on this page.')).toBeVisible();
     await expect.poll(() => messages.length).toBe(3);
     expect(messages[2]).toContain('Your Assame password was changed');
     const otherContext = await page

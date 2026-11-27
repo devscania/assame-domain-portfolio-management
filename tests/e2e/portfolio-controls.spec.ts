@@ -304,7 +304,7 @@ test('listing creation requires exact preview and explicit confirmation in the b
     await expect(dialog.getByText('New BIN: $2,500', { exact: true })).toBeVisible();
     expect(confirmed).toBe(0);
     await dialog.getByRole('button', { name: 'Confirm add listing', exact: true }).click();
-    await expect(dialog.getByText('completed', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Provider confirmed', { exact: true })).toBeVisible();
     expect(confirmed).toBe(1);
     await dialog.getByRole('button', { name: 'Done', exact: true }).click();
     await page.getByRole('checkbox', { name: 'Select all domains on this page' }).check();

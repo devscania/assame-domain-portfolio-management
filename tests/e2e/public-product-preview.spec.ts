@@ -97,7 +97,7 @@ test('public overview preview uses the real charts without account portfolio req
     ).toHaveCSS('visibility', 'visible');
     await expect(
       preview.locator('.home-dashboard-performance .recharts-tooltip-wrapper'),
-    ).toContainText('Recorded spending');
+    ).toContainText('Dated spending');
   }
   await expect(preview.locator('.home-dashboard-kpis select')).toHaveCount(0);
   await expect(preview.locator('.home-dashboard-performance select')).toHaveCount(1);

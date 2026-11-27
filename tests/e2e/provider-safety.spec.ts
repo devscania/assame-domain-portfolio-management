@@ -14,7 +14,7 @@ test.afterEach(async () => {
     await db.user.delete({ where: { id: user.id } });
   }
 });
-test('explains local records and does not claim a provider change', async ({
+test('keeps asking prices local and hides registrar writes without a verified connection', async ({
   page,
   verifyFixtureEmail,
 }) => {
@@ -72,20 +72,17 @@ test('explains local records and does not claim a provider change', async ({
     ).binPrice?.toString(),
   ).toBe('100');
   await page.getByRole('link', { name: new RegExp(name.replace('.', '\\.')) }).click();
-  await page.getByRole('button', { name: 'Record nameservers', exact: true }).click();
-  const dialog = page.getByRole('dialog');
+  await expect(page.getByRole('heading', { name: 'Nameservers & ownership' })).toBeVisible();
+  await expect(page.getByText('old.example.test', { exact: true })).toBeVisible();
   await expect(
-    dialog.getByText('These values are recorded in Assame only.', { exact: false }),
-  ).toBeVisible();
-  await dialog.getByLabel('Nameservers (one per line)').fill('ns1.example.test');
-  await dialog.getByRole('button', { name: 'Record nameservers' }).click();
-  await expect(
-    page.getByText(`Nameservers recorded for ${name}; update your registrar separately.`),
-  ).toBeVisible();
-  expect(
-    (await db.domainRegistration.findUniqueOrThrow({ where: { id: domain.registrations[0].id } }))
-      .verifiedAt,
-  ).toBeNull();
+    page.getByRole('button', { name: `Change nameservers for ${name}`, exact: true }),
+  ).toHaveCount(0);
+  const registration = await db.domainRegistration.findUniqueOrThrow({
+    where: { id: domain.registrations[0].id },
+  });
+  expect(registration.nameservers).toEqual(['old.example.test']);
+  expect(registration.verifiedAt).toEqual(domain.registrations[0].verifiedAt);
+  expect(await db.providerChange.count({ where: { organizationId: domain.organizationId } })).toBe(0);
   await page.getByRole('button', { name: 'Marketplace listings' }).click();
   await expect(page.getByRole('button', { name: 'Delisting unavailable' })).toBeDisabled();
 });

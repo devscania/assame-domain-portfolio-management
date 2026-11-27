@@ -37,9 +37,9 @@ test('analytics requires consent and records only sanitized public paths', async
   expect(JSON.stringify(events)).not.toContain('secret');
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('link', { name: 'Features' })
+    .getByRole('link', { name: 'FAQ', exact: true })
     .click();
-  await expect(page).toHaveURL(/\/features$/);
+  await expect(page).toHaveURL(/\/faq$/);
   await expect
     .poll(async () =>
       page.evaluate(
@@ -50,6 +50,14 @@ test('analytics requires consent and records only sanitized public paths', async
       ),
     )
     .toBe(2);
+  const nextView = await page.evaluate(() =>
+    (window as unknown as { dataLayer: IArguments[] }).dataLayer
+      .map((entry) => Array.from(entry))
+      .filter((entry) => entry[0] === 'event' && entry[1] === 'page_view')
+      .at(-1),
+  );
+  expect(nextView?.[2]).toMatchObject({ page_location: browserUrl('/faq'), page_referrer: '' });
+  expect(tagRequests).toBe(1);
   await page.getByRole('button', { name: 'Analytics preferences' }).click();
   await page.getByRole('button', { name: 'Reject analytics' }).click();
   await expect
