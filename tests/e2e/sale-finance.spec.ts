@@ -69,6 +69,7 @@ test('records a sold domain with net payout, displays profit and shows LTO forec
         soldAt: new Date('2026-07-07'),
         installments: 17,
         installmentsPaid: 4,
+        previousInstallmentAt: new Date('2026-10-14'),
         nextInstallmentAt: new Date('2026-11-14'),
       },
     });
@@ -80,13 +81,17 @@ test('records a sold domain with net payout, displays profit and shows LTO forec
     await page.waitForLoadState('load');
     await page.goto(`/domains/${domain.id}`);
     await page.getByRole('button', { name: 'Record sale', exact: true }).click();
-    await expect(page.getByRole('combobox', { name: 'Domain', exact: true })).toHaveValue(domain.id);
+    await expect(page.getByRole('combobox', { name: 'Domain', exact: true })).toHaveValue(
+      domain.id,
+    );
     await page.getByLabel('Gross agreement amount', { exact: true }).fill('500');
     await page.getByLabel('Total commission', { exact: true }).fill('25');
     await page.getByLabel('Marketplace', { exact: true }).fill('Dynadot');
     await page.getByLabel('Agreement date', { exact: true }).fill('2026-10-06');
     await page.getByLabel('Net payout already received (optional)', { exact: true }).fill('475');
-    await expect(page.getByRole('dialog').getByRole('textbox', { name: /commission/i })).toHaveCount(1);
+    await expect(
+      page.getByRole('dialog').getByRole('textbox', { name: /commission/i }),
+    ).toHaveCount(1);
     await page.getByRole('button', { name: 'Record agreement', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     const sale = await db.domainSale.findFirstOrThrow({
@@ -116,9 +121,13 @@ test('records a sold domain with net payout, displays profit and shows LTO forec
     await expect(
       report.getByText('Recorded cash receipts: Not reconciled', { exact: true }),
     ).toBeVisible();
+    await expect(report.getByText('Seller payout date:', { exact: true })).toBeVisible();
+    await expect(report.getByText(/Seller payout date: Not reported/)).toBeVisible();
     await report.getByRole('button', { name: 'Record sale and payout' }).click();
     await expect(page.getByRole('heading', { name: 'Record a lease-to-own sale' })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Domain', exact: true })).toHaveValue(leaseDomain.id);
+    await expect(page.getByRole('combobox', { name: 'Domain', exact: true })).toHaveValue(
+      leaseDomain.id,
+    );
     await expect(page.getByLabel('Installments (1 = outright)')).toHaveValue('17');
     await page.getByLabel('Net payout already received (optional)', { exact: true }).fill('60');
     await page.getByLabel('Payment received date (optional)', { exact: true }).fill('2026-10-21');
@@ -134,13 +143,37 @@ test('records a sold domain with net payout, displays profit and shows LTO forec
     expect(lease.payments[0].amount.toString()).toBe('60');
     const withLease = await (await page.request.get('/api/console?view=summary')).json();
     expect(new Decimal(withLease.collected).eq('535')).toBe(true);
+    await page
+      .getByRole('button', { name: 'View reported sale for lto-finance-fixture.test', exact: true })
+      .click();
+    await report.getByRole('button', { name: 'Record received payout', exact: true }).click();
+    const providerReceipt = page.getByRole('dialog', { name: 'Record a received payment' });
+    await expect(providerReceipt.getByLabel('Amount received (USD)', { exact: true })).toHaveValue(
+      '',
+    );
+    await expect(providerReceipt.getByLabel('Received on', { exact: true })).toHaveValue('');
+    await providerReceipt.getByLabel('Amount received (USD)', { exact: true }).fill('100');
+    await providerReceipt
+      .getByLabel('Payment reference', { exact: true })
+      .fill('confirmed-seller-payout');
+    await providerReceipt.getByLabel('Received on', { exact: true }).fill('2026-10-25');
+    await providerReceipt.getByRole('button', { name: 'Record payment', exact: true }).click();
+    await expect(providerReceipt).toHaveCount(0);
+    const confirmed = await db.salePayment.findUniqueOrThrow({
+      where: { saleId_reference: { saleId: lease.id, reference: 'confirmed-seller-payout' } },
+    });
+    expect(confirmed.amount.toString()).toBe('100');
+    expect(confirmed.receivedAt?.toISOString().slice(0, 10)).toBe('2026-10-25');
+    const afterPayout = await (await page.request.get('/api/console?view=summary')).json();
+    expect(new Decimal(afterPayout.collected).eq('635')).toBe(true);
+    expect(afterPayout.providerSales[0].installmentsPaid).toBe(4);
     const leaseRow = page.getByRole('row').filter({
       has: page.getByRole('button', { name: 'lto-finance-fixture.test', exact: true }),
     });
     await leaseRow.getByRole('button', { name: 'Payment', exact: true }).click();
     const receipt = page.getByRole('dialog', { name: 'Record a received payment' });
     await expect(receipt.getByRole('textbox', { name: /commission/i })).toHaveCount(0);
-    await receipt.getByLabel('Amount received (USD)', { exact: true }).fill('1176');
+    await receipt.getByLabel('Amount received (USD)', { exact: true }).fill('1076');
     await receipt.getByLabel('Payment reference', { exact: true }).fill('final-net-payout');
     await receipt.getByRole('button', { name: 'Record payment', exact: true }).click();
     await expect(receipt).toHaveCount(0);
@@ -149,14 +182,24 @@ test('records a sold domain with net payout, displays profit and shows LTO forec
       where: { saleId_reference: { saleId: lease.id, reference: 'final-net-payout' } },
     });
     expect(finalPayout.commissionWithheld.toString()).toBe('309');
+    await page
+      .getByRole('button', { name: 'View reported sale for lto-finance-fixture.test', exact: true })
+      .click();
+    await expect(
+      report.getByRole('button', { name: 'Agreement fully received', exact: true }),
+    ).toBeDisabled();
+    await report.getByRole('button', { name: 'Close dialog', exact: true }).click();
     await page.goto('/sync');
     await expect(page.getByRole('heading', { name: 'Activity center', exact: true })).toBeVisible();
     await expect(page.getByText('Payout recorded', { exact: true }).first()).toBeVisible();
     await page.goto('/sales');
     await page.getByRole('button', { name: 'sold-finance-fixture.test', exact: true }).click();
     await page.getByRole('button', { name: 'Set received date', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Edit payout & collected cash' })
-      .getByRole('textbox', { name: /commission/i })).toHaveCount(0);
+    await expect(
+      page
+        .getByRole('dialog', { name: 'Edit payout & collected cash' })
+        .getByRole('textbox', { name: /commission/i }),
+    ).toHaveCount(0);
     await page.getByLabel('Actual received date', { exact: true }).fill('2026-10-08');
     const dateSaved = page.waitForResponse(
       (r) =>
@@ -171,11 +214,17 @@ test('records a sold domain with net payout, displays profit and shows LTO forec
     ).toBe('2026-10-08');
 
     const change = (action: string, data: Record<string, string>) =>
-      page.request.post('/api/console', { headers: { Origin: browserOrigin }, data: { action, data } });
-    expect((await change('payment.update', { paymentId: sale.payments[0].id, amount: '480' })).ok()).toBe(true);
+      page.request.post('/api/console', {
+        headers: { Origin: browserOrigin },
+        data: { action, data },
+      });
+    expect(
+      (await change('payment.update', { paymentId: sale.payments[0].id, amount: '480' })).ok(),
+    ).toBe(true);
     expect((await change('sale.update', { saleId: sale.id, commission: '20' })).ok()).toBe(true);
     const corrected = await db.domainSale.findUniqueOrThrow({
-      where: { id: sale.id }, include: { payments: true, commissions: true },
+      where: { id: sale.id },
+      include: { payments: true, commissions: true },
     });
     expect(corrected.status).toBe('completed');
     expect(corrected.commissions.map((fee) => fee.amount.toString())).toEqual(['20']);
@@ -183,11 +232,16 @@ test('records a sold domain with net payout, displays profit and shows LTO forec
     expect(corrected.payments[0].commissionWithheld.toString()).toBe('20');
     expect(corrected.payments[0].receivedAt?.toISOString().slice(0, 10)).toBe('2026-10-08');
     await db.$transaction([
-      db.salePayment.update({ where: { id: corrected.payments[0].id }, data: { commissionWithheld: '0' } }),
+      db.salePayment.update({
+        where: { id: corrected.payments[0].id },
+        data: { commissionWithheld: '0' },
+      }),
       db.domainSale.update({ where: { id: sale.id }, data: { status: 'paying' } }),
     ]);
     expect((await change('sale.update', { saleId: sale.id, commission: '20' })).ok()).toBe(true);
-    expect((await db.domainSale.findUniqueOrThrow({ where: { id: sale.id } })).status).toBe('completed');
+    expect((await db.domainSale.findUniqueOrThrow({ where: { id: sale.id } })).status).toBe(
+      'completed',
+    );
   } finally {
     if (orgId) await db.organization.delete({ where: { id: orgId } });
     if (userId) await db.user.delete({ where: { id: userId } });

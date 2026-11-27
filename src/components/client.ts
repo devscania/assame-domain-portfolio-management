@@ -162,6 +162,8 @@ export type Summary = {
     commissionAmount: string | null;
     installmentAmount: string | null;
     nextInstallmentAt: string | null;
+    previousInstallmentAt: string | null;
+    disbursedAt: string | null;
     recordedInvestment: string | null;
     domainId: string | null;
     hasLedgerSale: boolean;

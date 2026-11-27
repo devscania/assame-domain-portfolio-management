@@ -1038,64 +1038,14 @@ export function Sales({ data }: { data: Summary }) {
         onOpenChange={setCreate}
         reported={reported}
       />
-      <Modal
-        title="Record a received payment"
-        description={`${payment?.domain.name || ''} · This records money actually collected.`}
+      <ReceivedPaymentForm
+        key={payment?.id || 'no-payment'}
+        sale={payment}
         open={!!payment}
-        onOpenChange={(v) => {
-          if (!v) setPayment(undefined);
+        onOpenChange={(value) => {
+          if (!value) setPayment(undefined);
         }}
-      >
-        <form
-          method="post"
-          className="stack"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            const values = Object.fromEntries(new FormData(e.currentTarget));
-            try {
-              await api('payment.create', {
-                ...values,
-                receivedAt: values.receivedAt || null,
-                saleId: payment?.id,
-              });
-              await query.invalidateQueries();
-              setPayment(undefined);
-              toast.success('Payment recorded');
-            } catch (err) {
-              toast.error((err as Error).message);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <Field
-            label={`Amount received (${payment?.currency})`}
-            hint="Net payout from your statement"
-          >
-            <Input name="amount" required inputMode="decimal" />
-          </Field>
-          <Field
-            label="Payment reference"
-            hint="Use a unique reference to prevent duplicate payments."
-          >
-            <Input name="reference" required maxLength={100} />
-          </Field>
-          <Field
-            label="Received on"
-            hint="Leave blank if unknown; undated receipts are excluded from monthly charts."
-          >
-            <Input
-              name="receivedAt"
-              type="date"
-              defaultValue={new Date().toISOString().slice(0, 10)}
-            />
-          </Field>
-          <Button disabled={busy} variant="primary">
-            Record payment
-          </Button>
-        </form>
-      </Modal>
+      />
       <Modal
         title={detail?.domain.name || 'Sale details'}
         description="Agreement schedule and received payment history."
@@ -1346,6 +1296,71 @@ export function Sales({ data }: { data: Summary }) {
     </>
   );
 }
+function ReceivedPaymentForm({
+  sale,
+  open,
+  onOpenChange,
+}: {
+  sale?: Sale;
+  open: boolean;
+  onOpenChange(value: boolean): void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const query = useQueryClient();
+  return (
+    <Modal
+      title="Record a received payment"
+      description={`${sale?.domain.name || ''} · This records money actually collected.`}
+      open={!!sale && open}
+      onOpenChange={(v) => {
+        onOpenChange(v);
+      }}
+    >
+      <form
+        method="post"
+        className="stack"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          const values = Object.fromEntries(new FormData(e.currentTarget));
+          try {
+            await api('payment.create', {
+              ...values,
+              receivedAt: values.receivedAt || null,
+              saleId: sale?.id,
+            });
+            await query.invalidateQueries();
+            onOpenChange(false);
+            toast.success('Payment recorded');
+          } catch (err) {
+            toast.error((err as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <Field label={`Amount received (${sale?.currency})`} hint="Net payout from your statement">
+          <Input name="amount" required inputMode="decimal" />
+        </Field>
+        <Field
+          label="Payment reference"
+          hint="Use a unique reference to prevent duplicate payments."
+        >
+          <Input name="reference" required maxLength={100} />
+        </Field>
+        <Field
+          label="Received on"
+          hint="Leave blank if unknown; undated receipts are excluded from monthly charts."
+        >
+          <Input name="receivedAt" type="date" defaultValue="" />
+        </Field>
+        <Button disabled={busy} variant="primary">
+          Record payment
+        </Button>
+      </form>
+    </Modal>
+  );
+}
 function ProviderSaleReport({
   sale,
   ledgerSale,
@@ -1356,6 +1371,7 @@ function ProviderSaleReport({
   onRecord: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [payoutOpen, setPayoutOpen] = useState(false);
   const workspace = useWorkspace();
   const expectedNet =
     sale.commissionAmount !== null ? new Decimal(sale.amount).minus(sale.commissionAmount) : null;
@@ -1413,9 +1429,16 @@ function ProviderSaleReport({
               {sale.installments ?? 'Unknown'}
             </p>
             <p>
-              <strong>Buyer installment:</strong>{' '}
-              {formatMoney(sale.installmentAmount, sale.currency)} · <strong>Next buyer payment:</strong>{' '}
-              {formatDate(sale.nextInstallmentAt)}
+              <strong>Reported installment:</strong>{' '}
+              {formatMoney(sale.installmentAmount, sale.currency)} ·{' '}
+              <strong>Next reported installment:</strong> {formatDate(sale.nextInstallmentAt)}
+            </p>
+            <p>
+              <strong>Previous reported installment:</strong>{' '}
+              {formatDate(sale.previousInstallmentAt)}
+              {' · '}
+              <strong>Seller payout date:</strong>{' '}
+              {sale.disbursedAt ? formatDate(sale.disbursedAt) : 'Not reported'}
             </p>
             <p>
               <strong>Recorded cash receipts:</strong>{' '}
@@ -1425,22 +1448,39 @@ function ProviderSaleReport({
             </p>
             <p className="notice">
               Use the amount and received date on your seller payout statement to record cash.
-              The buyer’s installment date and your payout date can differ.
+              Reported paid installments do not confirm seller payouts. The buyer’s installment date
+              and your payout date can differ.
             </p>
             <Button
-              disabled={workspace.role === 'VIEWER' || sale.hasLedgerSale || !sale.domainId}
+              disabled={
+                workspace.role === 'VIEWER' ||
+                !sale.domainId ||
+                (sale.hasLedgerSale && !ledgerSale) ||
+                (!!ledgerSale && new Decimal(saleFigures(ledgerSale).unpaid).lte(0))
+              }
               onClick={() => {
                 setOpen(false);
-                onRecord();
+                if (ledgerSale) setPayoutOpen(true);
+                else onRecord();
               }}
             >
-              {sale.hasLedgerSale
-                ? 'Agreement already recorded'
-                : 'Record sale and payout'}
+              {ledgerSale
+                ? new Decimal(saleFigures(ledgerSale).unpaid).lte(0)
+                  ? 'Agreement fully received'
+                  : 'Record received payout'
+                : sale.hasLedgerSale
+                  ? 'Agreement already recorded'
+                  : 'Record sale and payout'}
             </Button>
           </div>
         </Modal>
       )}
+      <ReceivedPaymentForm
+        key={ledgerSale?.id || 'no-ledger-sale'}
+        sale={ledgerSale}
+        open={payoutOpen}
+        onOpenChange={setPayoutOpen}
+      />
     </>
   );
 }

@@ -235,6 +235,9 @@ describe.skipIf(!enabled)('PostgreSQL tenancy, imports, accounting and synchroni
     expect(observation.commissionAmount?.toString()).toBe('309');
     expect(observation.installmentAmount?.toString()).toBe('75.34');
     expect(observation.nextInstallmentAt?.toISOString().slice(0, 10)).toBe('2026-11-14');
+    const report = (await dashboard(a)).providerSales.find((sale) => sale.id === observation.id)!;
+    expect(report.previousInstallmentAt?.toISOString().slice(0, 10)).toBe('2026-10-15');
+    expect(report.disbursedAt).toBeNull();
     expect(JSON.stringify(observation)).not.toContain('authCode');
     expect(await db.salePayment.count({ where: { sale: { domainId: existing.id } } })).toBe(0);
     expect(await db.providerAnalytics.count({ where: { providerAccountId: account.id } })).toBe(1);

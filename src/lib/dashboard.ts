@@ -217,6 +217,8 @@ export async function dashboard(ctx: Context) {
       commissionAmount: true,
       installmentAmount: true,
       nextInstallmentAt: true,
+      previousInstallmentAt: true,
+      disbursedAt: true,
       account: { select: { providerId: true, label: true } },
     },
     orderBy: { observedAt: 'desc' },

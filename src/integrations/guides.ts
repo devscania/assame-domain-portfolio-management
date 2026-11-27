@@ -99,7 +99,7 @@ export const providerGuides: Record<ProviderId, Guide> = {
     eligibility:
       'API access, account tier, IP restrictions and provider rate limits apply. The Secret Key signs requests that require RESTful v2 authentication.',
     limitations:
-      'Assame reads inventory and available marketplace listings. Only supported, confirmed price/listing operations are implemented; uncertain mutations are not blindly retried.',
+      'Assame reads inventory and available marketplace listings. Seller sales and payouts are not imported; record these from your seller statement on Sales & revenue. Purchase order history is not seller revenue. Only supported, confirmed price/listing operations are implemented; uncertain mutations are not blindly retried.',
     sources: [
       {
         title: 'Find Dynadot API settings',
